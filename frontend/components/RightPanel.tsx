@@ -137,7 +137,7 @@ export default function RightPanel() {
 function FriendRow({ friend }: { friend: FollowItem }) {
     return (
         <Link
-            href={`/profile/${friend.userId}`}
+            href={`/messages?userId=${encodeURIComponent(friend.userId)}`}
             className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-100"
         >
             <Avatar

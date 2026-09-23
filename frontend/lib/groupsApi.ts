@@ -22,6 +22,17 @@ export type GroupMember = {
     status: GroupMemberStatus;
 };
 
+export type GroupChatMessage = {
+    id: string;
+    groupId: string;
+    senderId: string;
+    senderFirstName: string;
+    senderLastName: string;
+    senderAvatarUrl: string | null;
+    content: string;
+    sentAt: string;
+};
+
 export type CreateGroupData = {
     title: string;
     description?: string;
@@ -81,6 +92,15 @@ export const groupsApi = {
     // ---------- Posts de groupe ----------
     getGroupPosts: (groupId: string) =>
         apiFetch<Post[]>(`/api/groups/${groupId}/posts`),
+
+    getGroupMessages: (groupId: string) =>
+        apiFetch<GroupChatMessage[]>(`/api/groups/${groupId}/messages`),
+
+    sendGroupMessage: (groupId: string, content: string) =>
+        apiFetch<GroupChatMessage>(`/api/groups/${groupId}/messages`, {
+            method: "POST",
+            body: JSON.stringify({ content }),
+        }),
 
     createGroupPost: (groupId: string, data: { content?: string; imageUrl?: string }) =>
         apiFetch<Post>(`/api/groups/${groupId}/posts`, {

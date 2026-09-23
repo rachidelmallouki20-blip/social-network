@@ -27,4 +27,7 @@ public class Message {
 
     @Column(name = "sent_at", nullable = false)
     private String sentAt = Instant.now().toString();
+
+    @Column(name = "is_read", nullable = false)
+    private boolean read = false;
 }

@@ -6,6 +6,7 @@ import com.example.socialnetwork.entity.Message;
 import com.example.socialnetwork.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -39,5 +40,15 @@ public class MessageService {
                 .stream()
                 .map(MessageResponse::fromEntity)
                 .toList();
+    }
+
+    public long getUnreadCount(String userId) {
+        return messageRepository.countByReceiverIdAndReadFalse(userId);
+    }
+
+    @Transactional
+    public void markConversationAsRead(String userId, String otherUserId) {
+        messageRepository.findByReceiverIdAndSenderIdAndReadFalse(userId, otherUserId)
+                .forEach(message -> message.setRead(true));
     }
 }

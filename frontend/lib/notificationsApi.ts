@@ -6,6 +6,9 @@ export type NotificationItem = {
     referenceId: string | null;
     read: boolean;
     createdAt: string;
+    title: string;
+    details: string;
+    href: string | null;
 };
 
 export const notificationsApi = {

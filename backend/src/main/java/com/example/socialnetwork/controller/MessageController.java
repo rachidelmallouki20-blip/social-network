@@ -21,4 +21,17 @@ public class MessageController {
         String currentUserId = currentUserService.getCurrentUser().getId();
         return messageService.getConversation(currentUserId, userId);
     }
+
+    @GetMapping("/unread-count")
+    public java.util.Map<String, Long> getUnreadCount() {
+        String currentUserId = currentUserService.getCurrentUser().getId();
+        return java.util.Map.of("count", messageService.getUnreadCount(currentUserId));
+    }
+
+    @PostMapping("/{userId}/read")
+    public java.util.Map<String, String> markConversationAsRead(@PathVariable String userId) {
+        String currentUserId = currentUserService.getCurrentUser().getId();
+        messageService.markConversationAsRead(currentUserId, userId);
+        return java.util.Map.of("message", "Conversation marked as read");
+    }
 }

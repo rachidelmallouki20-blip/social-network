@@ -9,6 +9,7 @@ import com.example.socialnetwork.entity.EventRsvp;
 import com.example.socialnetwork.entity.User;
 import com.example.socialnetwork.repository.EventRepository;
 import com.example.socialnetwork.repository.EventResponseRepository;
+import com.example.socialnetwork.repository.GroupMemberRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,13 +24,19 @@ public class EventService {
     private final EventRepository eventRepository;
     private final EventResponseRepository eventResponseRepository;
     private final GroupService groupService;
+    private final GroupMemberRepository groupMemberRepository;
+    private final NotificationService notificationService;
 
     public EventService(EventRepository eventRepository,
             EventResponseRepository eventResponseRepository,
-            GroupService groupService) {
+            GroupService groupService,
+            GroupMemberRepository groupMemberRepository,
+            NotificationService notificationService) {
         this.eventRepository = eventRepository;
         this.eventResponseRepository = eventResponseRepository;
         this.groupService = groupService;
+        this.groupMemberRepository = groupMemberRepository;
+        this.notificationService = notificationService;
     }
 
     // Crée un event dans un groupe. Réservé aux membres du groupe.
@@ -54,6 +61,13 @@ public class EventService {
         event.setDescription(req.getDescription());
         event.setEventTime(req.getEventTime());
         event = eventRepository.save(event);
+        String eventId = event.getId();
+
+        groupMemberRepository.findByGroupIdAndStatus(
+                groupId,
+                com.example.socialnetwork.entity.GroupMemberStatus.ACCEPTED)
+            .forEach(member -> notificationService.createNotification(
+                member.getUser().getId(), "event_created", eventId));
 
         return toResponse(event, currentUser.getId());
     }

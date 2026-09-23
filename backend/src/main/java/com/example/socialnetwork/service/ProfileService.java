@@ -138,12 +138,11 @@ public class ProfileService {
 
             Follow saved = followRepository.save(follow);
 
-            if ("pending".equals(saved.getStatus())) {
-                notificationService.createFollowRequestNotification(
-                        targetUser.getId(),
-                        saved.getId()
+                notificationService.createNotification(
+                    targetUser.getId(),
+                    "pending".equals(saved.getStatus()) ? "follow_request" : "new_follower",
+                    saved.getId()
                 );
-            }
 
             return FollowResponse.fromFollowee(saved);
         }

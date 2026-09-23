@@ -27,15 +27,18 @@ public class GroupService {
     private final GroupMemberRepository groupMemberRepository;
     private final UserRepository userRepository;
     private final PostRepository postRepository;
+    private final NotificationService notificationService;
 
     public GroupService(GroupRepository groupRepository,
             GroupMemberRepository groupMemberRepository,
             UserRepository userRepository,
-            PostRepository postRepository) {
+            PostRepository postRepository,
+            NotificationService notificationService) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.userRepository = userRepository;
         this.postRepository = postRepository;
+        this.notificationService = notificationService;
     }
 
     // Crée un groupe. Le créateur devient automatiquement membre ACCEPTED.
@@ -116,6 +119,7 @@ public class GroupService {
         }
 
         GroupMember member = addMember(groupId, target, GroupMemberStatus.INVITED);
+        notificationService.createNotification(target.getId(), "group_invite", groupId);
         return toMemberResponse(member);
     }
 
@@ -133,6 +137,7 @@ public class GroupService {
         }
 
         GroupMember member = addMember(groupId, currentUser, GroupMemberStatus.REQUESTED);
+        notificationService.createNotification(group.getCreator().getId(), "group_join_request", groupId);
         return toMemberResponse(member);
     }
 
