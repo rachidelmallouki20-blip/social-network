@@ -278,7 +278,7 @@ export default function MessagesPage() {
                     currentUserId={user?.id}
                     otherUser={selectedUser}
                     messages={messages}
-                    text={text}
+                    text={text}     
                     connected={connected}
                     onTextChange={setText}
                     onSend={sendMessage}
