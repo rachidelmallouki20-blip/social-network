@@ -9,6 +9,7 @@ import { groupsApi, type GroupChatMessage } from "@/lib/groupsApi";
 import Avatar from "@/components/Avatar";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const EMOJIS = ["😀", "😂", "😍", "😢", "😮", "👍", "🙏", "🔥", "🎉", "❤️"];
 
 function addMessage(messages: GroupChatMessage[], incoming: GroupChatMessage) {
     if (messages.some((message) => message.id === incoming.id)) return messages;
@@ -24,6 +25,7 @@ export default function GroupChat({ groupId }: { groupId: string }) {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showEmoji, setShowEmoji] = useState(false);
     const clientRef = useRef<Client | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +93,10 @@ export default function GroupChat({ groupId }: { groupId: string }) {
         }
     }
 
+        function addEmoji(emoji: string) {
+            setText((current) => current + emoji);
+        }
+
     return (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-4 py-3">
@@ -134,9 +140,33 @@ export default function GroupChat({ groupId }: { groupId: string }) {
                 <div ref={bottomRef} />
             </div>
 
+            {showEmoji && (
+                <div className="flex flex-wrap gap-1 border-t border-slate-100 bg-slate-50 p-2">
+                    {EMOJIS.map((emoji) => (
+                        <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => addEmoji(emoji)}
+                            className="rounded-lg p-1.5 text-lg hover:bg-slate-200"
+                        >
+                            {emoji}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <form onSubmit={sendMessage} className="border-t border-slate-100 p-3">
                 {error && <p className="mb-2 text-xs text-rose-600">{error}</p>}
                 <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowEmoji((v) => !v)}
+                        className={`rounded-xl border px-3 text-sm ${
+                            showEmoji ? "border-indigo-300 bg-indigo-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                    >
+                        😊
+                    </button>
                     <input
                         value={text}
                         onChange={(event) => setText(event.target.value)}
