@@ -7,7 +7,10 @@ public record NotificationResponse(
         String type,
         String referenceId,
         boolean read,
-        String createdAt
+        String createdAt,
+        String title,
+        String details,
+        String href
 ) {
     public static NotificationResponse fromEntity(Notification notification) {
         return new NotificationResponse(
@@ -15,7 +18,10 @@ public record NotificationResponse(
                 notification.getType(),
                 notification.getReferenceId(),
                 notification.isRead(),
-                notification.getCreatedAt()
+                notification.getCreatedAt(),
+                "Notification",
+                "Vous avez une nouvelle notification.",
+                null
         );
     }
 }

@@ -18,8 +18,8 @@ import java.util.UUID;
 @Service
 public class FileStorageService {
 
-    // Dossier local où sont enregistrées les images
-    private static final String UPLOAD_DIR = "uploads/avatars";
+    // Dossier racine de toutes les images uploadées
+    private static final String BASE_UPLOAD_DIR = "uploads";
 
     // Types d'images autorisés (Sécurité)
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -29,27 +29,41 @@ public class FileStorageService {
         "image/webp"
     );
 
-    private final Path rootLocation = Paths.get(UPLOAD_DIR);
+    private final Path rootLocation = Paths.get(BASE_UPLOAD_DIR);
 
     /**
-     * Crée le répertoire uploads/avatars au démarrage si nécessaire.
+     * Crée les sous-dossiers nécessaires au démarrage.
      */
     @PostConstruct
     public void init() {
         try {
-            Files.createDirectories(rootLocation);
+            Files.createDirectories(rootLocation.resolve("avatars"));
+            Files.createDirectories(rootLocation.resolve("posts"));
         } catch (IOException e) {
-            throw new RuntimeException("Could not initialize storage directory: " + UPLOAD_DIR, e);
+            throw new RuntimeException("Could not initialize storage directory: " + BASE_UPLOAD_DIR, e);
         }
     }
 
     /**
-     * Valide et sauvegarde un fichier image d'avatar sur le disque.
-     * @param file Le fichier MultipartFile envoyé par le frontend
-     * @return L'URL relative publique de l'image (ex: /uploads/avatars/uuid.png)
+     * Sauvegarde un avatar et retourne son URL relative publique.
      */
     public String storeAvatar(MultipartFile file) {
-        System.out.println("tswirraaaaaaaaaaaaaaaaaaa:"+file);
+        return storeImage(file, "avatars");
+    }
+
+    /**
+     * Sauvegarde une image de post et retourne son URL relative publique
+     * (ex: /uploads/posts/uuid.png).
+     */
+    public String storePostImage(MultipartFile file) {
+        return storeImage(file, "posts");
+    }
+
+    /**
+     * Valide et sauvegarde un fichier image dans le sous-dossier demandé.
+     * @return L'URL relative publique de l'image (ex: /uploads/posts/uuid.png)
+     */
+    public String storeImage(MultipartFile file, String subfolder) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is empty or missing");
         }
@@ -72,21 +86,23 @@ public class FileStorageService {
 
         // Génération d'un nom unique pour éviter les collisions et écrasements
         String uniqueFilename = UUID.randomUUID().toString() + extension;
-        Path destinationFile = this.rootLocation.resolve(Paths.get(uniqueFilename)).normalize().toAbsolutePath();
+
+        Path targetDir = this.rootLocation.resolve(subfolder).normalize().toAbsolutePath();
+        Path destinationFile = targetDir.resolve(Paths.get(uniqueFilename)).normalize().toAbsolutePath();
 
         // Protection contre le Path Traversal
-        if (!destinationFile.getParent().equals(this.rootLocation.toAbsolutePath())) {
+        if (!destinationFile.getParent().equals(targetDir)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot store file outside upload directory");
         }
 
         try (InputStream inputStream = file.getInputStream()) {
+            Files.createDirectories(targetDir);
             Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store image file", e);
         }
 
         // Retourne le chemin d'accès public
-        return "/uploads/avatars/" + uniqueFilename;
+        return "/uploads/" + subfolder + "/" + uniqueFilename;
     }
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { notificationsApi, type NotificationItem } from "@/lib/notificationsApi";
 
 export default function NotificationsPage() {
@@ -8,20 +9,25 @@ export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    async function loadNotifications() {
-        try {
-            setLoading(true);
-            const result = await notificationsApi.getAll();
-            setNotifications(result);
-        } catch (err) {
-            setError((err as Error).message);
-        } finally {
-            setLoading(false);
-        }
-    }
-
     useEffect(() => {
-        loadNotifications();
+        let active = true;
+
+        async function loadNotifications() {
+            try {
+                const result = await notificationsApi.getAll();
+                if (active) setNotifications(result);
+            } catch (err) {
+                if (active) setError((err as Error).message);
+            } finally {
+                if (active) setLoading(false);
+            }
+        }
+
+        void loadNotifications();
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     async function markAsRead(notification: NotificationItem) {
@@ -88,20 +94,23 @@ export default function NotificationsPage() {
             ) : (
                 <div className="space-y-2">
                     {notifications.map((notification) => (
-                        <button
+                        <Link
                             key={notification.id}
-                            type="button"
-                            onClick={() => markAsRead(notification)}
+                            href={notification.href ?? "/notifications"}
+                            onClick={() => {
+                                void markAsRead(notification);
+                            }}
                             className={`w-full rounded-xl border p-4 text-left transition ${
                                 notification.read
                                     ? "border-slate-200 bg-white"
-                                    : "border-indigo-200 bg-indigo-50"
+                                    : "border-indigo-200 bg-indigo-50 hover:border-indigo-300"
                             }`}
                         >
                             <p className="text-sm font-medium text-slate-900">
-                                {notification.type === "follow_request"
-                                    ? "Vous avez reçu une demande d'abonnement."
-                                    : "Nouvelle notification"}
+                                {notification.title}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">
+                                {notification.details}
                             </p>
 
                             <p className="mt-1 text-xs text-slate-500">
@@ -109,7 +118,7 @@ export default function NotificationsPage() {
                                     notification.createdAt
                                 ).toLocaleString("fr-FR")}
                             </p>
-                        </button>
+                        </Link>
                     ))}
                 </div>
             )}

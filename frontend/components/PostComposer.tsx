@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Post, PostPrivacy, postsApi } from "@/lib/postsApi";
-import Avatar from "./Avatar";
+import Avatar, { resolveAvatarUrl } from "./Avatar";
+import UserPicker, { PickedUser } from "./UserPicker";
 
-import {ImagePlus, Smile} from "lucide-react";
+import { ImagePlus, Smile, X, Loader2 } from "lucide-react";
 
 type PostComposerProps = {
     onCreated: (post: Post) => void;
@@ -17,29 +18,62 @@ export default function PostComposer({ onCreated }: PostComposerProps) {
     const { user } = useAuth();
     const [content, setContent] = useState("");
     const [imageUrl, setImageUrl] = useState("");
-    const [showImage, setShowImage] = useState(false);
+    const [preview, setPreview] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
     const [showMoods, setShowMoods] = useState(false);
     const [privacy, setPrivacy] = useState<PostPrivacy>("PUBLIC");
+    const [allowedViewers, setAllowedViewers] = useState<PickedUser[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    async function handleFileSelect(file: File) {
+        if (!file.type.startsWith("image/")) {
+            alert("Veuillez sélectionner une image (JPEG, PNG, WEBP, GIF).");
+            return;
+        }
+
+        const localPreview = URL.createObjectURL(file);
+        setPreview(localPreview);
+        setUploading(true);
+        setError(null);
+
+        try {
+            const url = await postsApi.uploadPostImage(file);
+            setImageUrl(url);
+            setPreview(resolveAvatarUrl(url));
+        } catch (err) {
+            setError((err as Error).message);
+            setPreview(null);
+        } finally {
+            URL.revokeObjectURL(localPreview);
+            setUploading(false);
+        }
+    }
+
+    function clearImage() {
+        setImageUrl("");
+        setPreview(null);
+    }
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if ((!content.trim() && !imageUrl.trim()) || submitting) return;
+        if ((!content.trim() && !imageUrl) || submitting || uploading) return;
 
         setSubmitting(true);
         setError(null);
         try {
             const created = await postsApi.createPost({
                 content: content.trim() || undefined,
-                imageUrl: imageUrl.trim() || undefined,
+                imageUrl: imageUrl || undefined,
                 privacy,
+                allowedViewerIds: privacy === "PRIVATE" ? allowedViewers.map((v) => v.id) : undefined,
             });
             onCreated(created);
             setContent("");
-            setImageUrl("");
-            setShowImage(false);
+            clearImage();
             setPrivacy("PUBLIC");
+            setAllowedViewers([]);
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -49,6 +83,18 @@ export default function PostComposer({ onCreated }: PostComposerProps) {
 
     return (
         <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                    e.target.value = "";
+                }}
+            />
+
             <div className="flex items-start gap-3">
                 <Avatar firstName={user?.firstName} lastName={user?.lastName} src={user?.avatarUrl} size={44} />
                 <textarea
@@ -60,14 +106,26 @@ export default function PostComposer({ onCreated }: PostComposerProps) {
                 />
             </div>
 
-            {showImage && (
-                <input
-                    type="url"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="Collez l'URL d'une image..."
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:bg-white"
-                />
+            {preview && (
+                <div className="relative mt-3 overflow-hidden rounded-xl border border-slate-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={preview} alt="Aperçu" className="max-h-80 w-full object-cover" />
+                    {uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+                            <Loader2 size={24} className="animate-spin" />
+                        </div>
+                    )}
+                    {!uploading && (
+                        <button
+                            type="button"
+                            onClick={clearImage}
+                            className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white transition hover:bg-black/80"
+                            aria-label="Retirer l'image"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
             )}
 
             {showMoods && (
@@ -85,15 +143,30 @@ export default function PostComposer({ onCreated }: PostComposerProps) {
                 </div>
             )}
 
+            {privacy === "PRIVATE" && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-2 text-xs font-medium text-slate-600">Choisir qui peut voir ce post</p>
+                    <UserPicker
+                        selected={allowedViewers}
+                        onChange={setAllowedViewers}
+                        placeholder="Rechercher un utilisateur à autoriser..."
+                    />
+                    <p className="mt-2 text-[11px] text-slate-400">
+                        Si personne n&apos;est sélectionné, seul vous verrez ce post.
+                    </p>
+                </div>
+            )}
+
             {error && <p className="mt-2 text-xs text-rose-500">{error}</p>}
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                 <div className="flex items-center gap-1">
                     <button
                         type="button"
-                        onClick={() => setShowImage((v) => !v)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                            showImage ? "bg-indigo-50 text-indigo-600" : "text-slate-600 hover:bg-slate-100"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+                            preview ? "bg-indigo-50 text-indigo-600" : "text-slate-600 hover:bg-slate-100"
                         }`}
                     >
                         <ImagePlus size={16} />
@@ -114,12 +187,13 @@ export default function PostComposer({ onCreated }: PostComposerProps) {
                     >
                         <option value="PUBLIC">🌍 Public</option>
                         <option value="FOLLOWERS">👥 Abonnés</option>
+                        <option value="PRIVATE">🔒 Privé</option>
                     </select>
                 </div>
 
                 <button
                     type="submit"
-                    disabled={submitting || (!content.trim() && !imageUrl.trim())}
+                    disabled={submitting || uploading || (!content.trim() && !imageUrl)}
                     className="rounded-xl bg-indigo-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {submitting ? "Publication..." : "Publier"}

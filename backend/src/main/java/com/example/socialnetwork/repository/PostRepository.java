@@ -8,4 +8,8 @@ import java.util.List;
 public interface PostRepository extends JpaRepository<Post, String> {
 
     List<Post> findByAuthorIdOrderByCreatedAtDesc(String authorId);
+
+    List<Post> findByGroupIdOrderByCreatedAtDesc(String groupId);
+
+    void deleteByGroupId(String groupId);
 }

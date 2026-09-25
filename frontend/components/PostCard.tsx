@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { Post, formatRelativeTime, postsApi } from "@/lib/postsApi";
+import { Post, PostPrivacy, formatRelativeTime, postsApi } from "@/lib/postsApi";
+import { profileApi } from "@/lib/profileApi";
 import { copyToClipboard } from "@/lib/clipboard";
-import Avatar from "./Avatar";
+import Avatar, { resolveAvatarUrl } from "./Avatar";
 import CommentSection from "./CommentSection";
+import UserPicker, { PickedUser } from "./UserPicker";
 
 import { Globe2, Users, Lock, Heart, MessageCircle, Share2 } from "lucide-react";
 
@@ -29,10 +31,13 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
     const [liked, setLiked] = useState(post.likedByMe);
     const [likes, setLikes] = useState(post.likesCount);
     const [liking, setLiking] = useState(false);
+    const [commentsCount, setCommentsCount] = useState(post.commentsCount ?? 0);
     const [showComments, setShowComments] = useState(false);
 
     const [editing, setEditing] = useState(false);
     const [editContent, setEditContent] = useState(post.content ?? "");
+    const [editPrivacy, setEditPrivacy] = useState<PostPrivacy>(post.privacy);
+    const [editViewers, setEditViewers] = useState<PickedUser[]>([]);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [shared, setShared] = useState(false);
@@ -53,11 +58,37 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
         }
     }
 
+    async function startEditing() {
+        setEditing(true);
+        setEditContent(post.content ?? "");
+        setEditPrivacy(post.privacy);
+        setEditViewers([]);
+        if (post.privacy === "PRIVATE" && post.allowedViewerIds?.length) {
+            const profiles = await Promise.all(
+                post.allowedViewerIds.map((id) => profileApi.getProfile(id).catch(() => null))
+            );
+            setEditViewers(
+                profiles
+                    .filter((p): p is NonNullable<typeof p> => p !== null)
+                    .map((p) => ({
+                        id: p.id,
+                        firstName: p.firstName,
+                        lastName: p.lastName,
+                        avatarUrl: p.avatarUrl,
+                    }))
+            );
+        }
+    }
+
     async function handleSave() {
         if (!editContent.trim() || saving) return;
         setSaving(true);
         try {
-            const updated = await postsApi.updatePost(post.id, { content: editContent.trim() });
+            const updated = await postsApi.updatePost(post.id, {
+                content: editContent.trim(),
+                privacy: editPrivacy,
+                allowedViewerIds: editPrivacy === "PRIVATE" ? editViewers.map((v) => v.id) : [],
+            });
             onUpdated?.(updated);
             setEditing(false);
         } catch (err) {
@@ -110,10 +141,7 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
                 {isAuthor && !editing && (
                     <div className="flex items-center gap-2 text-xs">
                         <button
-                            onClick={() => {
-                                setEditing(true);
-                                setEditContent(post.content ?? "");
-                            }}
+                            onClick={startEditing}
                             className="rounded-full px-2.5 py-1 font-medium text-slate-500 transition hover:bg-slate-100 hover:text-indigo-600"
                         >
                             Modifier
@@ -138,6 +166,31 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
                             rows={3}
                             className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:bg-white"
                         />
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500">Visibilité :</span>
+                            <select
+                                value={editPrivacy}
+                                onChange={(e) => setEditPrivacy(e.target.value as PostPrivacy)}
+                                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-600 outline-none focus:border-indigo-400"
+                            >
+                                <option value="PUBLIC">🌍 Public</option>
+                                <option value="FOLLOWERS">👥 Abonnés</option>
+                                <option value="PRIVATE">🔒 Privé</option>
+                            </select>
+                        </div>
+                        {editPrivacy === "PRIVATE" && (
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="mb-2 text-xs font-medium text-slate-600">Qui peut voir ce post</p>
+                                <UserPicker
+                                    selected={editViewers}
+                                    onChange={setEditViewers}
+                                    placeholder="Rechercher un utilisateur..."
+                                />
+                                <p className="mt-2 text-[11px] text-slate-400">
+                                    Si personne n&apos;est sélectionné, seul vous verrez ce post.
+                                </p>
+                            </div>
+                        )}
                         <div className="flex justify-end gap-2">
                             <button
                                 onClick={() => setEditing(false)}
@@ -165,7 +218,7 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
                 {!editing && post.imageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                        src={post.imageUrl}
+                        src={resolveAvatarUrl(post.imageUrl) ?? undefined}
                         alt="Illustration de la publication"
                         className="mt-3 max-h-96 w-full rounded-xl object-cover"
                     />
@@ -176,9 +229,15 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
                 <span>{likes > 0 ? `${likes} J'aime` : "Aucun J'aime"}</span>
                 <button
                     onClick={() => setShowComments((v) => !v)}
-                    className="rounded-full px-2 py-1 font-medium transition hover:bg-slate-100"
+                    className="rounded-full px-2 py-1 font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                 >
-                    {showComments ? "Masquer les commentaires" : "Commenter"}
+                    {showComments
+                        ? "Masquer les commentaires"
+                        : commentsCount === 0
+                        ? "0 commentaire"
+                        : commentsCount === 1
+                        ? "1 commentaire"
+                        : `${commentsCount} commentaires`}
                 </button>
             </div>
 
@@ -194,7 +253,9 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
                 </button>
                 <button
                     onClick={() => setShowComments((v) => !v)}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition ${
+                        showComments ? "bg-indigo-50 text-indigo-600" : "text-slate-600 hover:bg-slate-100"
+                    }`}
                 >
                     <MessageCircle size={18} /> Commenter
                 </button>
@@ -213,7 +274,13 @@ export default function PostCard({ post, onDeleted, onUpdated }: PostCardProps) 
                 </button>
             </div>
 
-            {showComments && <CommentSection postId={post.id} />}
+            {showComments && (
+                <CommentSection
+                    postId={post.id}
+                    onCommentsCountChange={(count) => setCommentsCount(count)}
+                    onClose={() => setShowComments(false)}
+                />
+            )}
         </article>
     );
 }

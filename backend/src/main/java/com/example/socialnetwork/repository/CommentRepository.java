@@ -7,6 +7,9 @@ import java.util.List;
 
 public interface CommentRepository extends JpaRepository<Comment, String> {
 
-    // Renvoie tous les commentaires d'un post, du plus ancien au plus récent
-    List<Comment> findByPostIdOrderByCreatedAtAsc(String postId);
+    // Renvoie tous les commentaires d'un post, du plus récent au plus ancien
+    List<Comment> findByPostIdOrderByCreatedAtDesc(String postId);
+
+    // Compte le nombre de commentaires d'un post
+    long countByPostId(String postId);
 }

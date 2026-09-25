@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { notificationsApi } from "@/lib/notificationsApi";
+import { getUnreadMessageCount } from "@/lib/messagesApi";
 import Sidebar from "@/components/Sidebar";
 import RightPanel from "@/components/RightPanel";
 import Avatar from "@/components/Avatar";
@@ -22,12 +24,45 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     const { user, loading } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
+    const [unreadMessages, setUnreadMessages] = useState(0);
 
     useEffect(() => {
         if (!loading && !user) {
             router.replace("/login");
         }
     }, [loading, user, router]);
+
+    useEffect(() => {
+        if (!user?.id) return;
+        let active = true;
+
+        async function loadUnreadCount() {
+            try {
+                const [notificationCount, messageResult] = await Promise.all([
+                    notificationsApi.getUnreadCount(),
+                    getUnreadMessageCount(),
+                ]);
+                if (active) {
+                    setUnreadNotifications(notificationCount);
+                    setUnreadMessages(messageResult.count);
+                }
+            } catch {
+                if (active) {
+                    setUnreadNotifications(0);
+                    setUnreadMessages(0);
+                }
+            }
+        }
+
+        void loadUnreadCount();
+        window.addEventListener("messages-read", loadUnreadCount);
+
+        return () => {
+            active = false;
+            window.removeEventListener("messages-read", loadUnreadCount);
+        };
+    }, [user?.id, pathname]);
 
     if (loading || !user) {
         return (
@@ -67,7 +102,17 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                                     }`}
                             >
                                 <Icon size={18} />
-                                {item.label}
+                                <span className="flex-1">{item.label}</span>
+                                {item.href === "/notifications" && unreadNotifications > 0 && (
+                                    <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                        {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                                    </span>
+                                )}
+                                {item.href === "/messages" && unreadMessages > 0 && (
+                                    <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                        {unreadMessages > 99 ? "99+" : unreadMessages}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

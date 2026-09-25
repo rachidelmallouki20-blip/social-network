@@ -43,4 +43,17 @@ public class PostController {
     public void deletePost(@PathVariable String postId) {
         postService.deletePost(postId, currentUserService.getCurrentUser());
     }
+
+    @PostMapping("/groups/{groupId}/posts")
+    public PostResponse createGroupPost(
+            @PathVariable String groupId,
+            @RequestBody CreatePostRequest req
+    ) {
+        return postService.createGroupPost(groupId, currentUserService.getCurrentUser(), req);
+    }
+
+    @GetMapping("/groups/{groupId}/posts")
+    public List<PostResponse> getGroupPosts(@PathVariable String groupId) {
+        return postService.getGroupPosts(groupId, currentUserService.getCurrentUser());
+    }
 }

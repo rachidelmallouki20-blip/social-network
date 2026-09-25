@@ -42,7 +42,7 @@ public class CommentService {
             throw new AccessDeniedException("Tu n'as pas le droit de voir ce post");
         }
 
-        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtAsc(postId);
+        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(postId);
         List<CommentResponse> result = new ArrayList<>();
 
         for (Comment comment : comments) {
