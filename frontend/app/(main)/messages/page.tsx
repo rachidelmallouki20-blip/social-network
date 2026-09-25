@@ -20,6 +20,8 @@ type ChatMessage = {
     sentAt: string;
 };
 
+const EMOJIS = ["😀", "😂", "😍", "😢", "😮", "👍", "🙏", "🔥", "🎉", "❤️"];
+
 type Conversation = {
     friend: FollowItem;
     lastMessage: ChatMessage | null;
@@ -56,6 +58,9 @@ export default function MessagesPage() {
     const [connected, setConnected] = useState(false);
     const stompClientRef = useRef<Client | null>(null);
     const selectedUserRef = useRef<User | null>(null);
+
+    const [chatError, setChatError] = useState<string | null>(null);   // add
+    const [showEmoji, setShowEmoji] = useState(false);
 
     useEffect(() => {
         selectedUserRef.current = selectedUser;
@@ -153,6 +158,12 @@ export default function MessagesPage() {
                             .catch(() => {});
                     }
                 });
+                client.subscribe("/user/queue/errors", (frame: IMessage) => {
+                    const payload = JSON.parse(frame.body) as { error?: string };
+                    setChatError(
+                        payload.error ?? "Vous ne pouvez pas envoyer de message à cette personne."
+                    );
+                });
             },
             onDisconnect: () => setConnected(false),
             onWebSocketError: () => setConnected(false),
@@ -189,6 +200,8 @@ export default function MessagesPage() {
         setSelectedGroup(null);
         setSearchResults([]);
         setSearch("");
+        setChatError(null);
+        setShowEmoji(false); 
 
         const history = await apiFetch<ChatMessage[]>(`/api/messages/${target.id}`);
         setMessages(history);
@@ -230,6 +243,9 @@ export default function MessagesPage() {
         });
 
         setText("");
+    }
+    function addEmoji(emoji: string) {
+        setText((current) => current + emoji);
     }
 
     return (
@@ -280,6 +296,10 @@ export default function MessagesPage() {
                     messages={messages}
                     text={text}     
                     connected={connected}
+                    chatError={chatError}          
+                    showEmoji={showEmoji}          
+                    onToggleEmoji={() => setShowEmoji((v) => !v)}   
+                    onEmojiSelect={addEmoji}       
                     onTextChange={setText}
                     onSend={sendMessage}
                     onBack={() => setSelectedUser(null)}
@@ -324,6 +344,10 @@ function PrivateChatView({
     messages,
     text,
     connected,
+    chatError,          
+    showEmoji,          
+    onToggleEmoji,      
+    onEmojiSelect,
     onTextChange,
     onSend,
     onBack,
@@ -333,6 +357,10 @@ function PrivateChatView({
     messages: ChatMessage[];
     text: string;
     connected: boolean;
+    chatError: string | null;                    
+    showEmoji: boolean;                           
+    onToggleEmoji: () => void;                    
+    onEmojiSelect: (emoji: string) => void;       
     onTextChange: (value: string) => void;
     onSend: (event: FormEvent) => void;
     onBack: () => void;
@@ -347,6 +375,12 @@ function PrivateChatView({
                     {otherUser.firstName} {otherUser.lastName}
                 </h2>
             </div>
+
+            {chatError && (                                                                     
+                <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">
+                    {chatError}
+                </div>
+            )}
 
             <div className="flex-1 space-y-3 overflow-y-auto py-4">
                 {messages.map((message) => {
@@ -365,7 +399,31 @@ function PrivateChatView({
                 })}
             </div>
 
+            {showEmoji && (                                                                      /* add */
+                <div className="mb-2 flex flex-wrap gap-1 rounded-xl border border-slate-100 bg-slate-50 p-2">
+                    {EMOJIS.map((emoji) => (
+                        <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => onEmojiSelect(emoji)}
+                            className="rounded-lg p-1.5 text-lg hover:bg-slate-200"
+                        >
+                            {emoji}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <form onSubmit={onSend} className="flex gap-2 border-t border-slate-100 pt-3">
+               <button                                                                          /* add */
+                    type="button"
+                    onClick={onToggleEmoji}
+                    className={`rounded-xl border px-3 py-2 text-sm ${
+                        showEmoji ? "border-indigo-300 bg-indigo-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                >
+                    😊
+                </button>
                 <input
                     value={text}
                     onChange={(event) => onTextChange(event.target.value)}

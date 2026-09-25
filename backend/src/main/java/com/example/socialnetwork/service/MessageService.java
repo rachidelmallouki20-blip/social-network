@@ -7,18 +7,29 @@ import com.example.socialnetwork.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.socialnetwork.repository.FollowRepository;   
+import org.springframework.http.HttpStatus;                      
+import org.springframework.web.server.ResponseStatusException;   
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class MessageService {
+    private static final String ACCEPTED = "accepted";
 
     private final MessageRepository messageRepository;
+    private final FollowRepository followRepository; 
 
     public MessageResponse sendMessage(String senderId, SendMessageRequest request) {
         if (request.content() == null || request.content().isBlank()) {
             throw new IllegalArgumentException("Message cannot be empty");
+        }
+        if (!canMessage(senderId, request.receiverId())) {         
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "You can only message users you follow or who follow you"
+        );
         }
 
         Message message = new Message();
@@ -27,6 +38,10 @@ public class MessageService {
         message.setContent(request.content().trim());
 
         return MessageResponse.fromEntity(messageRepository.save(message));
+    }
+    public boolean canMessage(String userAId, String userBId) {
+        return followRepository.existsByFollowerIdAndFolloweeIdAndStatus(userAId, userBId, ACCEPTED)
+            || followRepository.existsByFollowerIdAndFolloweeIdAndStatus(userBId, userAId, ACCEPTED);
     }
 
     public List<MessageResponse> getConversation(String userId, String otherUserId) {

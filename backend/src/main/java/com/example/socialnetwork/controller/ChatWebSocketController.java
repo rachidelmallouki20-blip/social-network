@@ -14,6 +14,8 @@ import org.springframework.stereotype.Controller;
 import com.example.socialnetwork.entity.User;
 import com.example.socialnetwork.repository.UserRepository;
 import java.security.Principal;
+import org.springframework.messaging.handler.annotation.MessageExceptionHandler; 
+import java.util.Map;                                                              
 
 @Controller
 @RequiredArgsConstructor
@@ -52,6 +54,17 @@ public class ChatWebSocketController {
                 sender.getEmail(),
                 "/queue/messages",
                 message
+        );
+    }
+    @MessageExceptionHandler
+    public void handleException(Throwable exception, Principal principal) {
+        if (principal == null) {
+            return;
+        }
+        messagingTemplate.convertAndSendToUser(
+                principal.getName(),
+                "/queue/errors",
+                Map.of("error", exception.getMessage())
         );
     }
 
