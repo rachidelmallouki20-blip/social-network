@@ -1,12 +1,21 @@
-<<<<<<< HEAD
-[README.md](https://github.com/user-attachments/files/31230391/README.md)
-=======
->>>>>>> repo-oumayma/oumayma
 # Social Network
 
-A Facebook-like social network with followers, profiles, posts, groups, real-time chat, and notifications.
+A Facebook-like social network with followers, profiles, posts, groups, events, real-time chat, and notifications.
 
-**Stack:** Next.js (frontend) · Spring Boot 4.1 (backend) · SQLite + Flyway (database) · Docker
+**Stack:** Next.js (frontend) · Spring Boot (backend) · SQLite + Flyway (database) · Docker
+
+---
+
+## Features
+
+- **Auth** — register (email, password, first/last name, date of birth, plus optional avatar, nickname, about me), login/logout, session-based auth (Spring Security + cookies)
+- **Followers** — follow/unfollow, follow requests with accept/decline for private profiles, auto-accept for public profiles
+- **Profile** — public/private toggle, followers/following lists, activity feed
+- **Posts & Comments** — three privacy levels (public, followers-only, selected followers), image/GIF attachments
+- **Groups** — create/browse groups, invite-to-join and request-to-join flows, group posts, group events
+- **Events** — title, description, date/time, Going/Not going RSVP
+- **Chat** — private messages and group chat over WebSocket, emoji support
+- **Notifications** — follow requests, group invites, group join requests, event creation — visible from every page
 
 ---
 
@@ -85,16 +94,19 @@ backend/
 │   ├── SocialNetworkApplication.java        # Entry point
 │   ├── config/
 │   │   ├── SecurityConfig.java              # Auth rules, password encoding, session policy
-│   │   └── CorsConfig.java                  # Allows the frontend origin to call the API with cookies
-│   ├── controller/
-│   │   └── AuthController.java              # /api/auth/register, /login, /me, /logout
-│   ├── entity/
-│   │   └── User.java                        # JPA entity mapped to the `users` table
-│   ├── repository/
-│   │   └── UserRepository.java              # Data access for User (Spring Data JPA)
-│   ├── dto/                                 # Request/response data shapes (empty — extend as needed)
-│   ├── service/                             # Business logic layer (empty — extend as needed)
-│   └── websocket/                           # WebSocket config & chat handlers (empty — extend as needed)
+│   │   ├── CorsConfig.java                  # Allows the frontend origin to call the API with cookies
+│   │   ├── WebMvcConfig.java                # Static resource / uploads serving config
+│   │   └── WebSocketConfig.java             # STOMP endpoint, group-chat subscription auth
+│   ├── controller/                          # REST endpoints (auth, users, profile, posts, comments,
+│   │   ...                                  # likes, groups, events, messages, group messages, notifications)
+│   ├── dto/                                 # Request/response payloads, grouped by feature (auth, chat,
+│   │   ...                                  # event, group, profile)
+│   ├── entity/                              # JPA entities (User, Post, Comment, Follow, Group,
+│   │   ...                                  # GroupMember, Event, EventRsvp, Message, Notification, Like...)
+│   ├── repository/                          # Spring Data JPA repositories, one per entity
+│   ├── security/                            # CurrentUserService, UserPrincipal, CustomUserDetailsService
+│   └── service/                             # Business logic layer (Auth, Post, Comment, Group,
+│                                             # GroupMessage, Event, Message, Notification, Profile, FileStorage)
 └── src/main/resources/
     ├── application.yml                      # Server port, datasource, Flyway, session config
     └── db/migration/sqlite/                 # Flyway migrations — one file per schema change
@@ -110,7 +122,9 @@ backend/
         ├── V10__create_messages_table.sql
         ├── V11__create_group_messages_table.sql
         ├── V12__create_notifications_table.sql
-        └── V13__create_indexes.sql
+        ├── V13__create_indexes.sql
+        ├── V14__create_likes_table.sql
+        └── V15__add_message_read_state.sql
 ```
 
 **How migrations work:** every time the backend starts, Flyway automatically runs any `.sql` file in `db/migration/sqlite/` that hasn't been applied yet, in order (`V1`, `V2`, `V3`...). You never run migrations manually — just add a new `V<next_number>__description.sql` file and restart the app.
@@ -121,22 +135,32 @@ backend/
 frontend/
 ├── Dockerfile
 ├── package.json                  # npm dependencies & scripts
-├── .env.local                    # NEXT_PUBLIC_API_URL=http://localhost:8080 (not committed to git)
 ├── app/
 │   ├── layout.tsx                # Root layout, wraps the app in AuthProvider
 │   ├── login/page.tsx            # Login page
-│   └── register/page.tsx         # Registration page
+│   ├── register/page.tsx         # Registration page
+│   └── (main)/                   # Authenticated app shell
+│       ├── layout.tsx            # Sidebar + right panel layout
+│       ├── page.tsx              # Home feed
+│       ├── profile/[id]/page.tsx # Profile page
+│       ├── groups/page.tsx       # Browse/create groups
+│       ├── groups/[id]/page.tsx  # Group page (posts, members, events, chat)
+│       ├── messages/page.tsx     # Private chat
+│       └── notifications/page.tsx
+├── components/                   # PostCard, CommentSection, GroupChat, EventCard,
+│                                  # FollowButton, FollowersListModal, CreateGroupModal, ...
 ├── context/
 │   └── AuthContext.tsx           # Global auth state (current user, login, logout)
-├── lib/
-│   └── api.ts                    # Fetch wrapper that talks to the Spring Boot API
-└── middleware.ts                 # Redirects unauthenticated users to /login
+└── lib/
+    ├── api.ts                    # Fetch wrapper that talks to the Spring Boot API
+    ├── chatSocket.ts             # WebSocket/STOMP client
+    └── *Api.ts                   # Per-feature API clients (posts, groups, events, messages, profile, notifications)
 ```
 
 ### Root
 
 ```
-docker-compose.yml   # Defines the backend + frontend containers, ports, and shared volume
+docker-compose.yml   # Defines the backend + frontend containers, ports, and named volumes
 ```
 
 ---
@@ -144,9 +168,10 @@ docker-compose.yml   # Defines the backend + frontend containers, ports, and sha
 ## How the pieces fit together
 
 1. **Frontend (port 3000)** sends requests to **Backend (port 8080)** using `fetch(..., { credentials: "include" })`, so the session cookie is sent with every request.
-2. **Backend** authenticates via Spring Security + session cookies (not JWT) — sessions are stored in the database via Spring Session JDBC, so a user stays logged in even if the backend restarts.
-3. **Backend** talks to **SQLite**, stored in a Docker-managed volume (`db-data`) so data survives container restarts.
+2. **Backend** authenticates via Spring Security + session cookies (not JWT).
+3. **Backend** talks to **SQLite**, stored in a Docker-managed volume (`db-data`) so data survives container restarts. Uploaded images (avatars, post images) live in a separate `uploads-data` volume.
 4. **Flyway** owns the database schema — all tables are created/updated through the migration files, never manually.
+5. **WebSocket** (`/ws`, STOMP over SockJS) powers private messages and group chat; subscriptions to a group's chat topic are rejected unless the requesting user is an accepted member of that group.
 
 ---
 
@@ -156,7 +181,12 @@ docker-compose.yml   # Defines the backend + frontend containers, ports, and sha
 |---|---|
 | `docker compose up` fails with a Docker API/virtualization error | See the Windows note above — enable virtualization + WSL2, restart |
 | `npm ci` fails inside the frontend build | Run `npm install` locally first to sync `package-lock.json`, commit it, then rebuild |
-| Backend can't find the SQLite file (`path ... does not exist`) | Make sure `application.yml`'s datasource URL is `jdbc:sqlite:/data/social-network.db` (absolute path, matching the Docker volume) |
+| Backend can't find the SQLite file (`path ... does not exist`) | Make sure `application.yml`'s datasource URL matches the Docker volume mount path |
 | `mkdir a b` fails in PowerShell | Use Git Bash instead, or run `mkdir a` then `mkdir b` separately |
 
 ---
+
+## Notes for contributors
+
+- `backend/data/` and `backend/uploads/` are runtime data — make sure they're listed in `.gitignore` and not committed; the app recreates them on startup and Docker volumes persist them between runs.
+- Only JPEG, PNG, GIF, and WEBP images are accepted for avatars and post images (enforced server-side in `FileStorageService`).
