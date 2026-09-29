@@ -27,6 +27,7 @@ export type FollowItem = {
     nickname: string | null;
     status: string;
     createdAt: string | null;
+    isOnline?: boolean;
 };
 
 export type UpdateProfileData = {

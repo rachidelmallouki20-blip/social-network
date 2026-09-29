@@ -54,25 +54,16 @@ export default function RightPanel() {
         );
     }, [friends, searchQuery]);
 
-    // Limiter strictement à 10 personnes maximum
-    const displayedFriends = useMemo(() => {
-        return filteredFriends.slice(0, 5);
+    const onlineFriends = useMemo(() => {
+        return filteredFriends.filter((friend) => friend.isOnline);
+    }, [filteredFriends]);
+
+    const offlineFriends = useMemo(() => {
+        return filteredFriends.filter((friend) => !friend.isOnline);
     }, [filteredFriends]);
 
     return (
         <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] w-72 flex-col rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm xl:flex">
-            {/* En-tête avec compteur (max 10) */}
-            <div className="mb-2.5 flex items-center justify-between px-1">
-                <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
-                    Amis en ligne
-                </h2>
-                {!loading && (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-                        {displayedFriends.length}
-                    </span>
-                )}
-            </div>
 
             {/* Barre de recherche compacte (visible si plus de 4 amis au total) */}
             {friends.length > 4 && (
@@ -99,42 +90,70 @@ export default function RightPanel() {
             )}
 
             {/* Liste des amis (10 maximum) avec défilement si nécessaire */}
-            <div className="flex-1 space-y-0.5 overflow-y-auto pr-1">
+            <div className="flex-1 space-y-4 overflow-y-auto pr-1">
                 {loading ? (
-                    <div className="space-y-2 p-1">
-                        {[1, 2, 3, 4].map((i) => (
-                            <div key={i} className="flex animate-pulse items-center gap-2.5 px-2 py-1.5">
-                                <div className="h-8 w-8 rounded-full bg-slate-100" />
-                                <div className="h-3 w-24 rounded bg-slate-100" />
-                            </div>
-                        ))}
-                    </div>
-                ) : friends.length === 0 ? (
-                    <div className="px-2 py-8 text-center text-xs text-slate-400">
-                        Aucun ami pour le moment.
-                    </div>
-                ) : filteredFriends.length === 0 ? (
-                    <div className="px-2 py-6 text-center text-xs text-slate-400">
-                        Aucun résultat pour cette recherche.
-                    </div>
+                    <p className="p-3 text-xs text-slate-400">Chargement...</p>
                 ) : (
                     <>
-                        {displayedFriends.map((friend) => (
-                            <FriendRow key={friend.userId} friend={friend} />
-                        ))}
-                        {filteredFriends.length > 10 && (
-                            <p className="pt-2 text-center text-[11px] text-slate-400">
-                                +{filteredFriends.length - 5} autre{filteredFriends.length - 5 > 1 ? "s" : ""} ami{filteredFriends.length - 5 > 1 ? "s" : ""}
-                            </p>
-                        )}
+                        <section>
+                            <div className="mb-2 flex items-center justify-between px-1">
+                                <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                    Amis en ligne
+                                </h2>
+                                <span className="text-xs text-emerald-600">
+                                    {onlineFriends.length}
+                                </span>
+                            </div>
+
+                            {onlineFriends.length === 0 ? (
+                                <p className="px-2 text-xs text-slate-400">Personne en ligne.</p>
+                            ) : (
+                                onlineFriends.map((friend) => (
+                                    <FriendRow
+                                        key={friend.userId}
+                                        friend={friend}
+                                        online={true}
+                                    />
+                                ))
+                            )}
+                        </section>
+
+                        <section className="border-t border-slate-100 pt-4">
+                            <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                <span className="h-2 w-2 rounded-full bg-slate-300" />
+                                Amis hors ligne
+                            </h2>
+
+                            {offlineFriends.length === 0 ? (
+                                <p className="px-2 text-xs text-slate-400">Personne hors ligne.</p>
+                            ) : (
+                                offlineFriends.map((friend) => (
+                                    <FriendRow
+                                        key={friend.userId}
+                                        friend={friend}
+                                        online={false}
+                                    />
+                                ))
+                            )}
+                        </section>
                     </>
                 )}
             </div>
+
+
+
         </aside>
     );
 }
 
-function FriendRow({ friend }: { friend: FollowItem }) {
+function FriendRow({
+    friend,
+    online,
+}: {
+    friend: FollowItem;
+    online: boolean;
+}) {
     return (
         <Link
             href={`/messages?userId=${encodeURIComponent(friend.userId)}`}
@@ -145,9 +164,11 @@ function FriendRow({ friend }: { friend: FollowItem }) {
                 lastName={friend.lastName}
                 src={friend.avatarUrl}
                 size={32}
-                online={true}
+                online={online}
             />
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700 group-hover:text-slate-900">
+            <span className={`min-w-0 flex-1 truncate text-xs font-medium ${
+                online ? "text-slate-700" : "text-slate-400"
+            }`}>
                 {friend.firstName} {friend.lastName}
             </span>
         </Link>
