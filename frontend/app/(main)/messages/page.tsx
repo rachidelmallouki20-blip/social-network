@@ -176,7 +176,7 @@ export default function MessagesPage() {
             client.deactivate();
             stompClientRef.current = null;
         };
-    }, []);
+        }, []);
 
     async function searchUsers(value: string) {
         setSearch(value);
